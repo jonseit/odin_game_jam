@@ -12,12 +12,14 @@ ENEMY_SPEED :: 150
 
 Enemy :: struct {
     position: rl.Vector2,
+    radius: f32,
     track_segment_idx: int,
     finished_track: bool,
 }
 
 Tower :: struct {
-    position: rl.Vector2
+    position: rl.Vector2,
+    length: f32,
 }
 
 Track_Segment :: struct {
@@ -75,15 +77,24 @@ restart :: proc() {
     clear(&enemies)
     append(&enemies, Enemy {
         position = track_tiles[0] * TILE_LENGTH + { TILE_LENGTH / 2, TILE_LENGTH / 2 },
+        radius = 15,
         track_segment_idx = 0,
     })
     append(&enemies, Enemy {
         position = track_tiles[1] * TILE_LENGTH + { TILE_LENGTH / 2, TILE_LENGTH / 2 },
+        radius = 15,
         track_segment_idx = 0,
     })
     append(&enemies, Enemy {
         position = track_tiles[2] * TILE_LENGTH + { TILE_LENGTH / 2, TILE_LENGTH / 2 },
+        radius = 15,
         track_segment_idx = 0,
+    })
+
+    clear(&towers)
+    append(&towers, Tower {
+        rl.Vector2{ 8, 9 } * TILE_LENGTH + { TILE_LENGTH / 2, TILE_LENGTH / 2 },
+        36,
     })
 }
 
@@ -173,8 +184,19 @@ main :: proc() {
             rl.DrawRectangleRec(tile_rec, rl.BLUE)
         }
 
+        for tower in towers {
+            tower_rec := rl.Rectangle {
+                tower.position.x - tower.length / 2,
+                tower.position.y - tower.length / 2,
+                tower.length,
+                tower.length,
+            }
+
+            rl.DrawRectangleRec(tower_rec, rl.GREEN)
+        }
+
         for enemy in enemies {
-            rl.DrawCircleV(enemy.position, 15, rl.RED)
+            rl.DrawCircleV(enemy.position, enemy.radius, rl.RED)
         }
 
         rl.EndMode2D()
