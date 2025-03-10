@@ -1,5 +1,7 @@
 package game
 
+import "core:fmt"
+import "core:math/linalg"
 import rl "vendor:raylib"
 
 SCREEN_WIDTH_PX :: 1000
@@ -9,17 +11,28 @@ TILE_LENGTH :: 50
 TRACK_LENGTH :: 33
 NUM_TRACK_SEGMENTS :: 4
 ENEMY_SPEED :: 150
+PROJECTILE_SPEED :: 200
 
 Enemy :: struct {
     position: rl.Vector2,
     radius: f32,
     track_segment_idx: int,
-    finished_track: bool,
+    is_finished: bool,
 }
 
 Tower :: struct {
     position: rl.Vector2,
     length: f32,
+    sight_radius: f32,
+    is_reloading: bool,
+}
+
+Projectile :: struct {
+    position: rl.Vector2,
+    direction: rl.Vector2,
+    radius: f32,
+    target_enemy: ^Enemy,
+    has_impacted: bool,
 }
 
 Track_Segment :: struct {
@@ -72,6 +85,7 @@ track : [NUM_TRACK_SEGMENTS]Track_Segment = {
 
 enemies: [dynamic]Enemy
 towers: [dynamic]Tower
+projectiles: [dynamic]Projectile
 
 restart :: proc() {
     clear(&enemies)
@@ -93,9 +107,17 @@ restart :: proc() {
 
     clear(&towers)
     append(&towers, Tower {
-        rl.Vector2{ 8, 9 } * TILE_LENGTH + { TILE_LENGTH / 2, TILE_LENGTH / 2 },
-        36,
+        position = rl.Vector2{ 8, 9 } * TILE_LENGTH + { TILE_LENGTH / 2, TILE_LENGTH / 2 },
+        length = 36,
+        sight_radius = 200,
     })
+    append(&towers, Tower {
+        position = rl.Vector2{ 12, 6 } * TILE_LENGTH + { TILE_LENGTH / 2, TILE_LENGTH / 2 },
+        length = 36,
+        sight_radius = 200,
+    })
+
+    clear(&projectiles)
 }
 
 main :: proc() {
@@ -113,59 +135,92 @@ main :: proc() {
         }
 
         for &enemy in enemies {
-            cur_track_segment := track[enemy.track_segment_idx]
-            next_track_segment := track[enemy.track_segment_idx + 1]
+            if !enemy.is_finished {
+                cur_track_segment := track[enemy.track_segment_idx]
+                next_track_segment := track[enemy.track_segment_idx + 1]
 
-            if cur_track_segment.direction.y > 0 {
-                next_position_y := enemy.position.y + rl.GetFrameTime() * ENEMY_SPEED
-                if next_position_y >= next_track_segment.position.y {
-                    position_carry_over := next_position_y - enemy.position.y
-                    enemy.position.y = next_track_segment.position.y
-                    enemy.position.x += position_carry_over * next_track_segment.direction.x
-                    enemy.track_segment_idx += 1
-                } else {
-                    enemy.position.y = next_position_y
+                if cur_track_segment.direction.y > 0 {
+                    next_position_y := enemy.position.y + rl.GetFrameTime() * ENEMY_SPEED
+                    if next_position_y >= next_track_segment.position.y {
+                        position_carry_over := next_position_y - enemy.position.y
+                        enemy.position.y = next_track_segment.position.y
+                        enemy.position.x += position_carry_over * next_track_segment.direction.x
+                        enemy.track_segment_idx += 1
+                    } else {
+                        enemy.position.y = next_position_y
+                    }
+                } else if cur_track_segment.direction.y < 0 {
+                    next_position_y := enemy.position.y - rl.GetFrameTime() * ENEMY_SPEED
+                    if next_position_y <= next_track_segment.position.y {
+                        position_carry_over := enemy.position.y - next_position_y
+                        enemy.position.y = next_track_segment.position.y
+                        enemy.position.x += position_carry_over * next_track_segment.direction.x
+                        enemy.track_segment_idx += 1
+                    } else {
+                        enemy.position.y = next_position_y
+                    }
+                } else if cur_track_segment.direction.x > 0 {
+                    next_position_x := enemy.position.x + rl.GetFrameTime() * ENEMY_SPEED
+                    if next_position_x >= next_track_segment.position.x {
+                        position_carry_over := next_position_x - enemy.position.x
+                        enemy.position.x = next_track_segment.position.x
+                        enemy.position.y += position_carry_over * next_track_segment.direction.y
+                        enemy.track_segment_idx += 1
+                    } else {
+                        enemy.position.x = next_position_x
+                    }
+                } else if cur_track_segment.direction.x < 0 {
+                    next_position_x := enemy.position.x - rl.GetFrameTime() * ENEMY_SPEED
+                    if next_position_x <= next_track_segment.position.x {
+                        position_carry_over := enemy.position.x - next_position_x
+                        enemy.position.x = next_track_segment.position.y
+                        enemy.position.y += position_carry_over * next_track_segment.direction.y
+                        enemy.track_segment_idx += 1
+                    } else {
+                        enemy.position.x = next_position_x
+                    }
                 }
-            } else if cur_track_segment.direction.y < 0 {
-                next_position_y := enemy.position.y - rl.GetFrameTime() * ENEMY_SPEED
-                if next_position_y <= next_track_segment.position.y {
-                    position_carry_over := enemy.position.y - next_position_y
-                    enemy.position.y = next_track_segment.position.y
-                    enemy.position.x += position_carry_over * next_track_segment.direction.x
-                    enemy.track_segment_idx += 1
-                } else {
-                    enemy.position.y = next_position_y
-                }
-            } else if cur_track_segment.direction.x > 0 {
-                next_position_x := enemy.position.x + rl.GetFrameTime() * ENEMY_SPEED
-                if next_position_x >= next_track_segment.position.x {
-                    position_carry_over := next_position_x - enemy.position.x
-                    enemy.position.x = next_track_segment.position.x
-                    enemy.position.y += position_carry_over * next_track_segment.direction.y
-                    enemy.track_segment_idx += 1
-                } else {
-                    enemy.position.x = next_position_x
-                }
-            } else if cur_track_segment.direction.x < 0 {
-                next_position_x := enemy.position.x - rl.GetFrameTime() * ENEMY_SPEED
-                if next_position_x <= next_track_segment.position.x {
-                    position_carry_over := enemy.position.x - next_position_x
-                    enemy.position.x = next_track_segment.position.y
-                    enemy.position.y += position_carry_over * next_track_segment.direction.y
-                    enemy.track_segment_idx += 1
-                } else {
-                    enemy.position.x = next_position_x
-                }
-            }
 
-            if enemy.track_segment_idx == NUM_TRACK_SEGMENTS - 1 {
-                enemy.finished_track = true
+                if enemy.track_segment_idx == NUM_TRACK_SEGMENTS - 1 {
+                    enemy.is_finished = true
+                }
             }
         }
 
-        for enemy, idx in enemies {
-            if enemy.finished_track {
-                unordered_remove(&enemies, idx)
+        for &tower in towers {
+            if !tower.is_reloading {
+                for &enemy in enemies {
+                    if !enemy.is_finished && rl.CheckCollisionCircles(tower.position, tower.sight_radius, enemy.position, enemy.radius) {
+                        projectile_dir := linalg.normalize(enemy.position - tower.position)
+                        append(&projectiles, Projectile {
+                            position = tower.position,
+                            direction = projectile_dir,
+                            radius = 5,
+                            target_enemy = &enemy,
+                        })
+
+                        tower.is_reloading = true //TODO set to false after some amount of time
+                    }
+                }
+            }
+        }
+
+        outer: for &projectile, idx in projectiles {
+            for &enemy in enemies {
+                if !enemy.is_finished && rl.CheckCollisionCircles(projectile.position, projectile.radius, enemy.position, enemy.radius) {
+                    enemy.is_finished = true
+                    projectile.has_impacted = true
+                    unordered_remove(&projectiles, idx)
+                    continue outer
+                }
+            }
+
+            if !projectile.has_impacted {
+                target_enemy := projectile.target_enemy^
+                if !target_enemy.is_finished {
+                    projectile.direction = linalg.normalize(target_enemy.position - projectile.position)
+                }
+                projectile.position += rl.GetFrameTime() * PROJECTILE_SPEED * projectile.direction
             }
         }
 
@@ -184,6 +239,10 @@ main :: proc() {
             rl.DrawRectangleRec(tile_rec, rl.BLUE)
         }
 
+        for projectile in projectiles {
+            rl.DrawCircleV(projectile.position, projectile.radius, rl.BLACK)
+        }
+
         for tower in towers {
             tower_rec := rl.Rectangle {
                 tower.position.x - tower.length / 2,
@@ -193,10 +252,14 @@ main :: proc() {
             }
 
             rl.DrawRectangleRec(tower_rec, rl.GREEN)
+
+            rl.DrawCircleV(tower.position, tower.sight_radius, { 0, 228, 48, 70 })
         }
 
         for enemy in enemies {
-            rl.DrawCircleV(enemy.position, enemy.radius, rl.RED)
+            if !enemy.is_finished {
+                rl.DrawCircleV(enemy.position, enemy.radius, rl.RED)
+            }
         }
 
         rl.EndMode2D()
