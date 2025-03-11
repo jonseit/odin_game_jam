@@ -33,7 +33,6 @@ Projectile :: struct {
     direction: rl.Vector2,
     radius: f32,
     target_enemy: ^Enemy,
-    has_impacted: bool,
 }
 
 Track_Segment :: struct {
@@ -210,22 +209,27 @@ main :: proc() {
         }
 
         outer: for &projectile, idx in projectiles {
+            if projectile.position.x < projectile.radius * 6 ||
+            projectile.position.x > SCREEN_WIDTH_PX * projectile.radius * 6 ||
+            projectile.position.y < projectile.radius * 6 ||
+            projectile.position.y > SCREEN_HEIGHT_PX * projectile.radius * 6 {
+                unordered_remove(&projectiles, idx)
+                continue
+            }
+
             for &enemy in enemies {
                 if !enemy.is_finished && rl.CheckCollisionCircles(projectile.position, projectile.radius, enemy.position, enemy.radius) {
                     enemy.is_finished = true
-                    projectile.has_impacted = true
                     unordered_remove(&projectiles, idx)
                     continue outer
                 }
             }
 
-            if !projectile.has_impacted {
-                target_enemy := projectile.target_enemy^
-                if !target_enemy.is_finished {
-                    projectile.direction = linalg.normalize(target_enemy.position - projectile.position)
-                }
-                projectile.position += rl.GetFrameTime() * PROJECTILE_SPEED * projectile.direction
+            target_enemy := projectile.target_enemy^
+            if !target_enemy.is_finished {
+                projectile.direction = linalg.normalize(target_enemy.position - projectile.position)
             }
+            projectile.position += rl.GetFrameTime() * PROJECTILE_SPEED * projectile.direction
         }
 
         // Rendering
