@@ -11,7 +11,8 @@ TILE_LENGTH :: 50
 TRACK_LENGTH :: 33
 NUM_TRACK_SEGMENTS :: 4
 ENEMY_SPEED :: 150
-PROJECTILE_SPEED :: 200
+PROJECTILE_SPEED :: 280
+RELOADING_TIME :: 2.5
 
 Enemy :: struct {
     position: rl.Vector2,
@@ -24,7 +25,7 @@ Tower :: struct {
     position: rl.Vector2,
     length: f32,
     sight_radius: f32,
-    is_reloading: bool,
+    reloading_timer: f32,
 }
 
 Projectile :: struct {
@@ -90,7 +91,7 @@ projectiles: [dynamic]Projectile
 restart :: proc() {
     clear(&enemies)
     append(&enemies, Enemy {
-        position = track_tiles[0] * TILE_LENGTH + { TILE_LENGTH / 2, TILE_LENGTH / 2 },
+        position = track_tiles[2] * TILE_LENGTH + { TILE_LENGTH / 2, TILE_LENGTH / 2 },
         radius = 15,
         track_segment_idx = 0,
     })
@@ -100,7 +101,7 @@ restart :: proc() {
         track_segment_idx = 0,
     })
     append(&enemies, Enemy {
-        position = track_tiles[2] * TILE_LENGTH + { TILE_LENGTH / 2, TILE_LENGTH / 2 },
+        position = track_tiles[0] * TILE_LENGTH + { TILE_LENGTH / 2, TILE_LENGTH / 2 },
         radius = 15,
         track_segment_idx = 0,
     })
@@ -188,7 +189,7 @@ main :: proc() {
         }
 
         for &tower in towers {
-            if !tower.is_reloading {
+            if tower.reloading_timer <= 0 {
                 for &enemy in enemies {
                     if !enemy.is_finished && rl.CheckCollisionCircles(tower.position, tower.sight_radius, enemy.position, enemy.radius) {
                         projectile_dir := linalg.normalize(enemy.position - tower.position)
@@ -199,9 +200,12 @@ main :: proc() {
                             target_enemy = &enemy,
                         })
 
-                        tower.is_reloading = true //TODO set to false after some amount of time
+                        tower.reloading_timer = RELOADING_TIME
+                        break
                     }
                 }
+            } else {
+                tower.reloading_timer -= rl.GetFrameTime()
             }
         }
 
