@@ -1,6 +1,7 @@
 package game
 
 import "core:fmt"
+import "core:math"
 import "core:math/linalg"
 import rl "vendor:raylib"
 
@@ -106,16 +107,16 @@ restart :: proc() {
     })
 
     clear(&towers)
-    append(&towers, Tower {
-        position = rl.Vector2{ 8, 9 } * TILE_LENGTH + { TILE_LENGTH / 2, TILE_LENGTH / 2 },
-        length = 36,
-        sight_radius = 200,
-    })
-    append(&towers, Tower {
-        position = rl.Vector2{ 12, 6 } * TILE_LENGTH + { TILE_LENGTH / 2, TILE_LENGTH / 2 },
-        length = 36,
-        sight_radius = 200,
-    })
+//    append(&towers, Tower {
+//        position = rl.Vector2{ 8, 9 } * TILE_LENGTH + { TILE_LENGTH / 2, TILE_LENGTH / 2 },
+//        length = 36,
+//        sight_radius = 200,
+//    })
+//    append(&towers, Tower {
+//        position = rl.Vector2{ 12, 6 } * TILE_LENGTH + { TILE_LENGTH / 2, TILE_LENGTH / 2 },
+//        length = 36,
+//        sight_radius = 200,
+//    })
 
     clear(&projectiles)
 }
@@ -132,6 +133,36 @@ main :: proc() {
 
         if rl.IsKeyPressed(.R) {
             restart()
+        }
+
+        if rl.IsMouseButtonPressed(.LEFT) {
+            mp := rl.GetMousePosition()
+            tower_pos := rl.Vector2 {
+                math.floor_f32(mp.x / TILE_LENGTH) * TILE_LENGTH + TILE_LENGTH / 2,
+                math.floor_f32(mp.y / TILE_LENGTH) * TILE_LENGTH + TILE_LENGTH / 2,
+            }
+            is_valid_pos := true
+            for tower in towers {
+                if tower.position == tower_pos {
+                    is_valid_pos = false
+                    break
+                }
+            }
+            if is_valid_pos {
+                for track_tile in track_tiles {
+                    if track_tile * TILE_LENGTH + { TILE_LENGTH / 2, TILE_LENGTH / 2 } == tower_pos {
+                        is_valid_pos = false
+                        break
+                    }
+                }
+            }
+            if is_valid_pos { //TODO make this check more efficient (e.g. use 2D bool array to track which tiles are free)
+                append(&towers, Tower {
+                    position = tower_pos,
+                    length = 36,
+                    sight_radius = 200,
+                })
+            }
         }
 
         for &enemy in enemies {
@@ -209,9 +240,9 @@ main :: proc() {
         }
 
         outer: for &projectile, idx in projectiles {
-            if projectile.position.x < projectile.radius * 6 ||
+            if projectile.position.x + projectile.radius * 6 < 0 ||
             projectile.position.x > SCREEN_WIDTH_PX * projectile.radius * 6 ||
-            projectile.position.y < projectile.radius * 6 ||
+            projectile.position.y + projectile.radius * 6 < 0 ||
             projectile.position.y > SCREEN_HEIGHT_PX * projectile.radius * 6 {
                 unordered_remove(&projectiles, idx)
                 continue
@@ -247,6 +278,15 @@ main :: proc() {
             rl.DrawRectangleRec(tile_rec, rl.BLUE)
         }
 
+        mp := rl.GetMousePosition()
+        highlight_rec := rl.Rectangle {
+            math.floor_f32(mp.x / TILE_LENGTH) * TILE_LENGTH,
+            math.floor_f32(mp.y / TILE_LENGTH) * TILE_LENGTH,
+            TILE_LENGTH,
+            TILE_LENGTH,
+        }
+        rl.DrawRectangleRec(highlight_rec, { 0, 228, 48, 100 })
+
         for projectile in projectiles {
             rl.DrawCircleV(projectile.position, projectile.radius, rl.BLACK)
         }
@@ -261,7 +301,7 @@ main :: proc() {
 
             rl.DrawRectangleRec(tower_rec, rl.GREEN)
 
-            rl.DrawCircleV(tower.position, tower.sight_radius, { 0, 228, 48, 70 })
+            rl.DrawCircleV(tower.position, tower.sight_radius, { 0, 228, 48, 40 })
         }
 
         for enemy in enemies {
