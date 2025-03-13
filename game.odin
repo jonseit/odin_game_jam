@@ -5,14 +5,14 @@ import "core:math"
 import "core:math/linalg"
 import rl "vendor:raylib"
 
-SCREEN_WIDTH_PX :: 1000
-SCREEN_HEIGHT_PX :: 1000
-NUM_TILES_PER_SIDE :: 20
-TILE_LENGTH :: 50
-TRACK_LENGTH :: 33
-NUM_TRACK_SEGMENTS :: 4
-ENEMY_SPEED :: 150
-PROJECTILE_SPEED :: 280
+SCREEN_LENGHT_PX :: 960
+SCREEN_SIZE :: 240
+NUM_TILES_PER_SIDE :: 10
+TILE_LENGTH :: 24
+NUM_TRACK_TILES :: 29
+NUM_TRACK_SEGMENTS :: 11
+ENEMY_SPEED :: 50
+PROJECTILE_SPEED :: 100
 RELOADING_TIME :: 2.5
 
 Enemy :: struct {
@@ -41,47 +41,50 @@ Track_Segment :: struct {
     direction: rl.Vector2,
 }
 
-track_tiles : [TRACK_LENGTH]rl.Vector2 = {
-    { 5, 0 },
+track_tiles : [NUM_TRACK_TILES]rl.Vector2 = {
+    { 0, 2 },
+    { 1, 2 },
+    { 1, 3 },
+    { 1, 4 },
+    { 1, 5 },
+    { 2, 5 },
+    { 3, 5 },
+    { 4, 5 },
+    { 4, 4 },
+    { 4, 3 },
+    { 4, 2 },
+    { 4, 1 },
     { 5, 1 },
-    { 5, 2 },
-    { 5, 3 },
-    { 5, 4 },
-    { 5, 5 },
-    { 5, 6 },
-    { 5, 7 },
+    { 6, 1 },
+    { 7, 1 },
+    { 8, 1 },
+    { 8, 2 },
+    { 8, 3 },
+    { 8, 4 },
+    { 7, 4 },
+    { 7, 5 },
+    { 7, 6 },
+    { 7, 7 },
+    { 7, 8 },
+    { 6, 8 },
     { 5, 8 },
-    { 5, 9 },
-    { 5, 10 },
-    { 5, 11 },
-    { 5, 12 },
-    { 6, 12 },
-    { 7, 12 },
-    { 8, 12 },
-    { 9, 12 },
-    { 10, 12 },
-    { 11, 12 },
-    { 12, 12 },
-    { 13, 12 },
-    { 13, 11 },
-    { 13, 10 },
-    { 13, 9 },
-    { 13, 8 },
-    { 13, 7 },
-    { 13, 6 },
-    { 13, 5 },
-    { 13, 4 },
-    { 13, 3 },
-    { 13, 2 },
-    { 13, 1 },
-    { 13, 0 },
+    { 4, 8 },
+    { 3, 8 },
+    { 3, 9 },
 }
 
 track : [NUM_TRACK_SEGMENTS]Track_Segment = {
-    { track_tiles[0] * TILE_LENGTH + { TILE_LENGTH / 2, TILE_LENGTH / 2 }, { 0, 1 } },
-    { track_tiles[12] * TILE_LENGTH + { TILE_LENGTH / 2, TILE_LENGTH / 2 }, { 1, 0 } },
-    { track_tiles[20] * TILE_LENGTH + { TILE_LENGTH / 2, TILE_LENGTH / 2 }, { 0, -1 } },
-    { track_tiles[32] * TILE_LENGTH + { TILE_LENGTH / 2, TILE_LENGTH / 2 }, { 0, 0 } },
+    { track_tiles[0] * TILE_LENGTH + { TILE_LENGTH / 2, TILE_LENGTH / 2 }, { 1, 0 } },
+    { track_tiles[1] * TILE_LENGTH + { TILE_LENGTH / 2, TILE_LENGTH / 2 }, { 0, 1 } },
+    { track_tiles[4] * TILE_LENGTH + { TILE_LENGTH / 2, TILE_LENGTH / 2 }, { 1, 0 } },
+    { track_tiles[7] * TILE_LENGTH + { TILE_LENGTH / 2, TILE_LENGTH / 2 }, { 0, -1 } },
+    { track_tiles[11] * TILE_LENGTH + { TILE_LENGTH / 2, TILE_LENGTH / 2 }, { 1, 0 } },
+    { track_tiles[15] * TILE_LENGTH + { TILE_LENGTH / 2, TILE_LENGTH / 2 }, { 0, 1 } },
+    { track_tiles[18] * TILE_LENGTH + { TILE_LENGTH / 2, TILE_LENGTH / 2 }, { -1, 0 } },
+    { track_tiles[19] * TILE_LENGTH + { TILE_LENGTH / 2, TILE_LENGTH / 2 }, { 0, 1 } },
+    { track_tiles[23] * TILE_LENGTH + { TILE_LENGTH / 2, TILE_LENGTH / 2 }, { -1, 0 } },
+    { track_tiles[27] * TILE_LENGTH + { TILE_LENGTH / 2, TILE_LENGTH / 2 }, { 0, 1 } },
+    { track_tiles[28] * TILE_LENGTH + { TILE_LENGTH / 2, TILE_LENGTH / 2 }, { 0, 0 } },
 }
 
 enemies: [dynamic]Enemy
@@ -92,51 +95,43 @@ restart :: proc() {
     clear(&enemies)
     append(&enemies, Enemy {
         position = track_tiles[2] * TILE_LENGTH + { TILE_LENGTH / 2, TILE_LENGTH / 2 },
-        radius = 15,
+        radius = 8,
         track_segment_idx = 0,
     })
     append(&enemies, Enemy {
         position = track_tiles[1] * TILE_LENGTH + { TILE_LENGTH / 2, TILE_LENGTH / 2 },
-        radius = 15,
+        radius = 8,
         track_segment_idx = 0,
     })
     append(&enemies, Enemy {
         position = track_tiles[0] * TILE_LENGTH + { TILE_LENGTH / 2, TILE_LENGTH / 2 },
-        radius = 15,
+        radius = 8,
         track_segment_idx = 0,
     })
 
     clear(&towers)
-//    append(&towers, Tower {
-//        position = rl.Vector2{ 8, 9 } * TILE_LENGTH + { TILE_LENGTH / 2, TILE_LENGTH / 2 },
-//        length = 36,
-//        sight_radius = 200,
-//    })
-//    append(&towers, Tower {
-//        position = rl.Vector2{ 12, 6 } * TILE_LENGTH + { TILE_LENGTH / 2, TILE_LENGTH / 2 },
-//        length = 36,
-//        sight_radius = 200,
-//    })
-
     clear(&projectiles)
 }
 
 main :: proc() {
     rl.SetConfigFlags({ .VSYNC_HINT })
-    rl.InitWindow(SCREEN_WIDTH_PX, SCREEN_HEIGHT_PX, "Odin Game Jam")
+    rl.InitWindow(SCREEN_LENGHT_PX, SCREEN_LENGHT_PX, "Glaze the Doughnut!")
     rl.InitAudioDevice()
     rl.SetTargetFPS(500)
 
     restart()
 
     for !rl.WindowShouldClose() {
+        camera := rl.Camera2D {
+            zoom = f32(rl.GetScreenHeight() / SCREEN_SIZE)
+        }
 
         if rl.IsKeyPressed(.R) {
             restart()
         }
 
         if rl.IsMouseButtonPressed(.LEFT) {
-            mp := rl.GetMousePosition()
+            mp := rl.GetScreenToWorld2D(rl.GetMousePosition(), camera)
             tower_pos := rl.Vector2 {
                 math.floor_f32(mp.x / TILE_LENGTH) * TILE_LENGTH + TILE_LENGTH / 2,
                 math.floor_f32(mp.y / TILE_LENGTH) * TILE_LENGTH + TILE_LENGTH / 2,
@@ -159,8 +154,8 @@ main :: proc() {
             if is_valid_pos { //TODO make this check more efficient (e.g. use 2D bool array to track which tiles are free)
                 append(&towers, Tower {
                     position = tower_pos,
-                    length = 36,
-                    sight_radius = 200,
+                    length = 20,
+                    sight_radius = 60,
                 })
             }
         }
@@ -204,7 +199,7 @@ main :: proc() {
                     next_position_x := enemy.position.x - rl.GetFrameTime() * ENEMY_SPEED
                     if next_position_x <= next_track_segment.position.x {
                         position_carry_over := enemy.position.x - next_position_x
-                        enemy.position.x = next_track_segment.position.y
+                        enemy.position.x = next_track_segment.position.x
                         enemy.position.y += position_carry_over * next_track_segment.direction.y
                         enemy.track_segment_idx += 1
                     } else {
@@ -226,7 +221,7 @@ main :: proc() {
                         append(&projectiles, Projectile {
                             position = tower.position,
                             direction = projectile_dir,
-                            radius = 5,
+                            radius = 4,
                             target_enemy = &enemy,
                         })
 
@@ -241,9 +236,9 @@ main :: proc() {
 
         outer: for &projectile, idx in projectiles {
             if projectile.position.x + projectile.radius * 6 < 0 ||
-            projectile.position.x > SCREEN_WIDTH_PX * projectile.radius * 6 ||
+            projectile.position.x > SCREEN_SIZE * projectile.radius * 6 ||
             projectile.position.y + projectile.radius * 6 < 0 ||
-            projectile.position.y > SCREEN_HEIGHT_PX * projectile.radius * 6 {
+            projectile.position.y > SCREEN_SIZE * projectile.radius * 6 {
                 unordered_remove(&projectiles, idx)
                 continue
             }
@@ -267,6 +262,8 @@ main :: proc() {
         rl.BeginDrawing()
         rl.ClearBackground(rl.GRAY)
 
+        rl.BeginMode2D(camera)
+
         for tile in track_tiles {
             tile_rec := rl.Rectangle {
                 tile.x * TILE_LENGTH,
@@ -278,7 +275,7 @@ main :: proc() {
             rl.DrawRectangleRec(tile_rec, rl.BLUE)
         }
 
-        mp := rl.GetMousePosition()
+        mp := rl.GetScreenToWorld2D(rl.GetMousePosition(), camera)
         highlight_rec := rl.Rectangle {
             math.floor_f32(mp.x / TILE_LENGTH) * TILE_LENGTH,
             math.floor_f32(mp.y / TILE_LENGTH) * TILE_LENGTH,
