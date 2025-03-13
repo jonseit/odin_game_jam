@@ -11,20 +11,22 @@ NUM_TILES_PER_SIDE :: 10
 TILE_LENGTH :: 24
 NUM_TRACK_TILES :: 29
 NUM_TRACK_SEGMENTS :: 11
+TOWER_RADIUS :: 10
+DOUGHNUT_RADIUS :: 8
+GLAZE_RADIUS :: 4
 ENEMY_SPEED :: 50
 PROJECTILE_SPEED :: 100
 RELOADING_TIME :: 2.5
 
 Enemy :: struct {
     position: rl.Vector2,
-    radius: f32,
     track_segment_idx: int,
+    is_hit: bool,
     is_finished: bool,
 }
 
 Tower :: struct {
     position: rl.Vector2,
-    length: f32,
     sight_radius: f32,
     reloading_timer: f32,
 }
@@ -32,7 +34,6 @@ Tower :: struct {
 Projectile :: struct {
     position: rl.Vector2,
     direction: rl.Vector2,
-    radius: f32,
     target_enemy: ^Enemy,
 }
 
@@ -95,17 +96,14 @@ restart :: proc() {
     clear(&enemies)
     append(&enemies, Enemy {
         position = track_tiles[2] * TILE_LENGTH + { TILE_LENGTH / 2, TILE_LENGTH / 2 },
-        radius = 8,
         track_segment_idx = 0,
     })
     append(&enemies, Enemy {
         position = track_tiles[1] * TILE_LENGTH + { TILE_LENGTH / 2, TILE_LENGTH / 2 },
-        radius = 8,
         track_segment_idx = 0,
     })
     append(&enemies, Enemy {
         position = track_tiles[0] * TILE_LENGTH + { TILE_LENGTH / 2, TILE_LENGTH / 2 },
-        radius = 8,
         track_segment_idx = 0,
     })
 
@@ -118,6 +116,11 @@ main :: proc() {
     rl.InitWindow(SCREEN_LENGHT_PX, SCREEN_LENGHT_PX, "Glaze the Doughnut!")
     rl.InitAudioDevice()
     rl.SetTargetFPS(500)
+
+    tower_texture := rl.LoadTexture("assets/tower.png")
+    glaze_texture := rl.LoadTexture("assets/glaze.png")
+    doughnut_unglazed_texture := rl.LoadTexture("assets/doughnut_unglazed.png")
+    doughnut_glazed_texture := rl.LoadTexture("assets/doughnut_glazed.png")
 
     restart()
 
@@ -154,7 +157,6 @@ main :: proc() {
             if is_valid_pos { //TODO make this check more efficient (e.g. use 2D bool array to track which tiles are free)
                 append(&towers, Tower {
                     position = tower_pos,
-                    length = 20,
                     sight_radius = 60,
                 })
             }
@@ -216,12 +218,11 @@ main :: proc() {
         for &tower in towers {
             if tower.reloading_timer <= 0 {
                 for &enemy in enemies {
-                    if !enemy.is_finished && rl.CheckCollisionCircles(tower.position, tower.sight_radius, enemy.position, enemy.radius) {
+                    if !enemy.is_hit && rl.CheckCollisionCircles(tower.position, tower.sight_radius, enemy.position, DOUGHNUT_RADIUS) {
                         projectile_dir := linalg.normalize(enemy.position - tower.position)
                         append(&projectiles, Projectile {
                             position = tower.position,
                             direction = projectile_dir,
-                            radius = 4,
                             target_enemy = &enemy,
                         })
 
@@ -235,24 +236,24 @@ main :: proc() {
         }
 
         outer: for &projectile, idx in projectiles {
-            if projectile.position.x + projectile.radius * 6 < 0 ||
-            projectile.position.x > SCREEN_SIZE * projectile.radius * 6 ||
-            projectile.position.y + projectile.radius * 6 < 0 ||
-            projectile.position.y > SCREEN_SIZE * projectile.radius * 6 {
+            if projectile.position.x + GLAZE_RADIUS * 6 < 0 ||
+            projectile.position.x > SCREEN_SIZE * GLAZE_RADIUS * 6 ||
+            projectile.position.y + GLAZE_RADIUS * 6 < 0 ||
+            projectile.position.y > SCREEN_SIZE * GLAZE_RADIUS * 6 {
                 unordered_remove(&projectiles, idx)
                 continue
             }
 
             for &enemy in enemies {
-                if !enemy.is_finished && rl.CheckCollisionCircles(projectile.position, projectile.radius, enemy.position, enemy.radius) {
-                    enemy.is_finished = true
+                if !enemy.is_hit && rl.CheckCollisionCircles(projectile.position, GLAZE_RADIUS, enemy.position, DOUGHNUT_RADIUS) {
+                    enemy.is_hit = true
                     unordered_remove(&projectiles, idx)
                     continue outer
                 }
             }
 
             target_enemy := projectile.target_enemy^
-            if !target_enemy.is_finished {
+            if !target_enemy.is_hit {
                 projectile.direction = linalg.normalize(target_enemy.position - projectile.position)
             }
             projectile.position += rl.GetFrameTime() * PROJECTILE_SPEED * projectile.direction
@@ -284,27 +285,23 @@ main :: proc() {
         }
         rl.DrawRectangleRec(highlight_rec, { 0, 228, 48, 100 })
 
-        for projectile in projectiles {
-            rl.DrawCircleV(projectile.position, projectile.radius, rl.BLACK)
-        }
-
         for tower in towers {
-            tower_rec := rl.Rectangle {
-                tower.position.x - tower.length / 2,
-                tower.position.y - tower.length / 2,
-                tower.length,
-                tower.length,
-            }
-
-            rl.DrawRectangleRec(tower_rec, rl.GREEN)
-
+            rl.DrawTextureV(tower_texture, tower.position - { TOWER_RADIUS, TOWER_RADIUS }, rl.WHITE)
             rl.DrawCircleV(tower.position, tower.sight_radius, { 0, 228, 48, 40 })
         }
 
         for enemy in enemies {
             if !enemy.is_finished {
-                rl.DrawCircleV(enemy.position, enemy.radius, rl.RED)
+                if enemy.is_hit {
+                    rl.DrawTextureV(doughnut_glazed_texture, enemy.position - { DOUGHNUT_RADIUS, DOUGHNUT_RADIUS }, rl.WHITE)
+                } else {
+                    rl.DrawTextureV(doughnut_unglazed_texture, enemy.position - { DOUGHNUT_RADIUS, DOUGHNUT_RADIUS }, rl.WHITE)
+                }
             }
+        }
+
+        for projectile in projectiles {
+            rl.DrawTextureV(glaze_texture, projectile.position - { GLAZE_RADIUS, GLAZE_RADIUS }, rl.WHITE)
         }
 
         rl.EndMode2D()
@@ -312,6 +309,11 @@ main :: proc() {
 
         free_all(context.temp_allocator)
     }
+
+    rl.UnloadTexture(tower_texture)
+    rl.UnloadTexture(glaze_texture)
+    rl.UnloadTexture(doughnut_unglazed_texture)
+    rl.UnloadTexture(doughnut_glazed_texture)
 
     rl.CloseAudioDevice()
     rl.CloseWindow()
