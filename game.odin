@@ -18,6 +18,7 @@ GLAZE_RADIUS :: 4
 DOUGHNUT_SPEED :: 40
 GLAZE_SPEED :: 100
 RELOADING_TIME :: 2.5
+NEW_DOUGHNUT_TIME_INTERVAL :: 1
 NUM_CONVEYER_FRAMES :: 3
 CONVEYER_FRAME_LENGTH :: 0.05
 
@@ -102,7 +103,7 @@ track_tiles : [NUM_TRACK_TILES]Track_Tile = {
 }
 
 track : [NUM_TRACK_SEGMENTS]Track_Segment = {
-    { track_tiles[0].position * TILE_SIZE + { TILE_SIZE / 2, TILE_SIZE / 2 }, { 1, 0 } },
+    { rl.Vector2{ -1, 2 } * TILE_SIZE + { TILE_SIZE / 2, TILE_SIZE / 2 }, { 1, 0 } },
     { track_tiles[1].position * TILE_SIZE + { TILE_SIZE / 2, TILE_SIZE / 2 }, { 0, 1 } },
     { track_tiles[4].position * TILE_SIZE + { TILE_SIZE / 2, TILE_SIZE / 2 }, { 1, 0 } },
     { track_tiles[7].position * TILE_SIZE + { TILE_SIZE / 2, TILE_SIZE / 2 }, { 0, -1 } },
@@ -112,12 +113,13 @@ track : [NUM_TRACK_SEGMENTS]Track_Segment = {
     { track_tiles[19].position * TILE_SIZE + { TILE_SIZE / 2, TILE_SIZE / 2 }, { 0, 1 } },
     { track_tiles[23].position * TILE_SIZE + { TILE_SIZE / 2, TILE_SIZE / 2 }, { -1, 0 } },
     { track_tiles[27].position * TILE_SIZE + { TILE_SIZE / 2, TILE_SIZE / 2 }, { 0, 1 } },
-    { track_tiles[28].position * TILE_SIZE + { TILE_SIZE / 2, TILE_SIZE / 2 }, { 0, 0 } },
+    { rl.Vector2{ 3, 10 } * TILE_SIZE + { TILE_SIZE / 2, TILE_SIZE / 2 }, { 0, 0 } },
 }
 
 doughnuts: [dynamic]Doughnut
 towers: [dynamic]Tower
 glazes: [dynamic]Glaze
+doughnut_timer: f32
 conveyer_current_frame: int
 conveyer_frame_timer: f32
 
@@ -154,18 +156,22 @@ draw_conveyer_animation :: proc(tile: Track_Tile, texture: rl.Texture2D) {
 
 restart :: proc() {
     clear(&doughnuts)
-    append(&doughnuts, Doughnut {
-        position = track_tiles[2].position * TILE_SIZE + { TILE_SIZE / 2, TILE_SIZE / 2 },
-        track_segment_idx = 0,
-    })
-    append(&doughnuts, Doughnut {
-        position = track_tiles[1].position * TILE_SIZE + { TILE_SIZE / 2, TILE_SIZE / 2 },
-        track_segment_idx = 0,
-    })
-    append(&doughnuts, Doughnut {
-        position = track_tiles[0].position * TILE_SIZE + { TILE_SIZE / 2, TILE_SIZE / 2 },
-        track_segment_idx = 0,
-    })
+//    append(&doughnuts, Doughnut {
+//        position = track_tiles[2].position * TILE_SIZE + { TILE_SIZE / 2, TILE_SIZE / 2 },
+//        track_segment_idx = 0,
+//    })
+//    append(&doughnuts, Doughnut {
+//        position = track_tiles[1].position * TILE_SIZE + { TILE_SIZE / 2, TILE_SIZE / 2 },
+//        track_segment_idx = 0,
+//    })
+//    append(&doughnuts, Doughnut {
+//        position = track[0].position * TILE_SIZE + { TILE_SIZE / 2, TILE_SIZE / 2 },
+//        track_segment_idx = 0,
+//    })
+//    append(&doughnuts, Doughnut {
+//        position = rl.Vector2{ -1, 2 } * TILE_SIZE + { TILE_SIZE / 2, TILE_SIZE / 2 },
+//        track_segment_idx = 0,
+//    })
 
     clear(&towers)
     clear(&glazes)
@@ -223,12 +229,29 @@ main :: proc() {
             }
         }
 
+        doughnut_timer += rl.GetFrameTime()
+        if doughnut_timer >= NEW_DOUGHNUT_TIME_INTERVAL {
+            append(&doughnuts, Doughnut {
+                position = rl.Vector2{ -1, 2 } * TILE_SIZE + { TILE_SIZE / 2, TILE_SIZE / 2 },
+                track_segment_idx = 0,
+            })
+            doughnut_timer = 0
+        }
+
         for &doughnut in doughnuts {
             if !doughnut.is_finished {
                 cur_track_segment := track[doughnut.track_segment_idx]
                 next_track_segment := track[doughnut.track_segment_idx + 1]
 
-                if cur_track_segment.direction.y > 0 {
+                if doughnut.position.x < 0 { // special case for when doughnut is out of screen at track start
+                    next_position_x := doughnut.position.x + rl.GetFrameTime() * DOUGHNUT_SPEED
+                    if next_position_x >= 0 {
+                        position_carry_over := doughnut.position.x - next_position_x
+                        doughnut.position.x = position_carry_over * next_track_segment.direction.x
+                    } else {
+                        doughnut.position.x = next_position_x
+                    }
+                } else if cur_track_segment.direction.y > 0 {
                     next_position_y := doughnut.position.y + rl.GetFrameTime() * DOUGHNUT_SPEED
                     if next_position_y >= next_track_segment.position.y {
                         position_carry_over := next_position_y - doughnut.position.y
@@ -276,7 +299,7 @@ main :: proc() {
             }
         }
 
-        outer_one: for &tower in towers {
+        for &tower in towers {
             if tower.reloading_timer <= 0 {
                 for &doughnut in doughnuts {
                     if !doughnut.is_glazed && rl.CheckCollisionCircles(tower.position, SIGHT_RADIUS, doughnut.position, DOUGHNUT_RADIUS) {
@@ -289,7 +312,7 @@ main :: proc() {
                         doughnut.glaze_pointer_counter += 1
 
                         tower.reloading_timer = RELOADING_TIME
-                        continue outer_one
+                        break
                     }
                 }
             } else {
@@ -297,7 +320,7 @@ main :: proc() {
             }
         }
 
-        outer_two: for &glaze, idx in glazes {
+        outer: for &glaze, idx in glazes {
             if glaze.position.x + GLAZE_RADIUS * 6 < 0 ||
             glaze.position.x > SCREEN_SIZE + GLAZE_RADIUS * 6 ||
             glaze.position.y + GLAZE_RADIUS * 6 < 0 ||
@@ -312,7 +335,7 @@ main :: proc() {
                     doughnut.is_glazed = true
                     glaze.target_doughnut^.glaze_pointer_counter -= 1
                     unordered_remove(&glazes, idx)
-                    continue outer_two
+                    continue outer
                 }
             }
 
@@ -325,8 +348,7 @@ main :: proc() {
 
         for &doughnut, idx in doughnuts {
             if doughnut.is_finished && doughnut.glaze_pointer_counter == 0 {
-                unordered_remove(&doughnuts, idx)
-                fmt.println("removed doughnut")
+                ordered_remove(&doughnuts, idx)
             }
         }
 
@@ -378,6 +400,9 @@ main :: proc() {
 
         free_all(context.temp_allocator)
     }
+
+    fmt.printfln("glazes array length: %v", len(glazes)) // debug
+    fmt.printfln("dougnut array length: %v", len(doughnuts)) // debug
 
     rl.UnloadTexture(tower_texture)
     rl.UnloadTexture(glaze_texture)
