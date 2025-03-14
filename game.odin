@@ -1,5 +1,6 @@
 package game
 
+import "core:fmt"
 import "core:math"
 import "core:math/linalg"
 import rl "vendor:raylib"
@@ -11,6 +12,7 @@ TILE_SIZE :: 24
 NUM_TRACK_TILES :: 29
 NUM_TRACK_SEGMENTS :: 11
 TOWER_RADIUS :: 10
+SIGHT_RADIUS :: 60
 DOUGHNUT_RADIUS :: 8
 GLAZE_RADIUS :: 4
 DOUGHNUT_SPEED :: 40
@@ -31,11 +33,11 @@ Doughnut :: struct {
     track_segment_idx: int,
     is_glazed: bool,
     is_finished: bool,
+    glaze_pointer_counter: int,
 }
 
 Tower :: struct {
     position: rl.Vector2,
-    sight_radius: f32,
     reloading_timer: f32,
 }
 
@@ -217,7 +219,6 @@ main :: proc() {
             if is_valid_pos {
                 append(&towers, Tower {
                     position = tower_pos,
-                    sight_radius = 60,
                 })
             }
         }
@@ -275,19 +276,20 @@ main :: proc() {
             }
         }
 
-        for &tower in towers {
+        outer_one: for &tower in towers {
             if tower.reloading_timer <= 0 {
                 for &doughnut in doughnuts {
-                    if !doughnut.is_glazed && rl.CheckCollisionCircles(tower.position, tower.sight_radius, doughnut.position, DOUGHNUT_RADIUS) {
+                    if !doughnut.is_glazed && rl.CheckCollisionCircles(tower.position, SIGHT_RADIUS, doughnut.position, DOUGHNUT_RADIUS) {
                         glaze_dir := linalg.normalize(doughnut.position - tower.position)
                         append(&glazes, Glaze {
                             position = tower.position,
                             direction = glaze_dir,
                             target_doughnut = &doughnut,
                         })
+                        doughnut.glaze_pointer_counter += 1
 
                         tower.reloading_timer = RELOADING_TIME
-                        break
+                        continue outer_one
                     }
                 }
             } else {
@@ -295,11 +297,12 @@ main :: proc() {
             }
         }
 
-        outer: for &glaze, idx in glazes {
+        outer_two: for &glaze, idx in glazes {
             if glaze.position.x + GLAZE_RADIUS * 6 < 0 ||
-            glaze.position.x > SCREEN_SIZE * GLAZE_RADIUS * 6 ||
+            glaze.position.x > SCREEN_SIZE + GLAZE_RADIUS * 6 ||
             glaze.position.y + GLAZE_RADIUS * 6 < 0 ||
-            glaze.position.y > SCREEN_SIZE * GLAZE_RADIUS * 6 {
+            glaze.position.y > SCREEN_SIZE + GLAZE_RADIUS * 6 {
+                glaze.target_doughnut^.glaze_pointer_counter -= 1
                 unordered_remove(&glazes, idx)
                 continue
             }
@@ -307,8 +310,9 @@ main :: proc() {
             for &doughnut in doughnuts {
                 if !doughnut.is_glazed && rl.CheckCollisionCircles(glaze.position, GLAZE_RADIUS, doughnut.position, DOUGHNUT_RADIUS) {
                     doughnut.is_glazed = true
+                    glaze.target_doughnut^.glaze_pointer_counter -= 1
                     unordered_remove(&glazes, idx)
-                    continue outer
+                    continue outer_two
                 }
             }
 
@@ -317,6 +321,13 @@ main :: proc() {
                 glaze.direction = linalg.normalize(target_doughnut.position - glaze.position)
             }
             glaze.position += rl.GetFrameTime() * GLAZE_SPEED * glaze.direction
+        }
+
+        for &doughnut, idx in doughnuts {
+            if doughnut.is_finished && doughnut.glaze_pointer_counter == 0 {
+                unordered_remove(&doughnuts, idx)
+                fmt.println("removed doughnut")
+            }
         }
 
         // Rendering
@@ -345,7 +356,7 @@ main :: proc() {
 
         for tower in towers {
             rl.DrawTextureV(tower_texture, tower.position - { TOWER_RADIUS, TOWER_RADIUS }, rl.WHITE)
-            rl.DrawCircleV(tower.position, tower.sight_radius, { 0, 228, 48, 40 })
+            rl.DrawCircleV(tower.position, SIGHT_RADIUS, { 0, 228, 48, 40 })
         }
 
         for doughnut in doughnuts {
