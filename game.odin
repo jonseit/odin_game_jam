@@ -180,6 +180,7 @@ main :: proc() {
     doughnut_unglazed_texture := rl.LoadTexture("assets/doughnut_unglazed.png")
     doughnut_glazed_texture := rl.LoadTexture("assets/doughnut_glazed.png")
     conveyor_texture := rl.LoadTexture("assets/conveyor.png")
+    tile_texture := rl.LoadTexture("assets/tile.png")
 
     restart()
 
@@ -320,9 +321,13 @@ main :: proc() {
 
         // Rendering
         rl.BeginDrawing()
-        rl.ClearBackground(rl.GRAY)
-
         rl.BeginMode2D(camera)
+
+        for x in 0..<NUM_TILES_PER_SIDE {
+            for y in 0..<NUM_TILES_PER_SIDE {
+                rl.DrawTextureV(tile_texture, { f32(x), f32(y) } * TILE_LENGTH, rl.WHITE)
+            }
+        }
 
         update_conveyer_animation_values()
         for tile in track_tiles {
@@ -368,6 +373,7 @@ main :: proc() {
     rl.UnloadTexture(doughnut_unglazed_texture)
     rl.UnloadTexture(doughnut_glazed_texture)
     rl.UnloadTexture(conveyor_texture)
+    rl.UnloadTexture(tile_texture)
 
     rl.CloseAudioDevice()
     rl.CloseWindow()
