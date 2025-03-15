@@ -170,6 +170,29 @@ draw_conveyer_animation :: proc(tile: Track_Tile, texture: rl.Texture2D) {
     rl.DrawTexturePro(texture, source, dest, tile_orientations[tile.orientation].origin, tile_orientations[tile.orientation].rotation, rl.WHITE)
 }
 
+check_tower_pos_valid :: proc(mp: rl.Vector2) -> (bool, rl.Vector2) {
+    tower_pos := rl.Vector2 {
+        math.floor_f32(mp.x / TILE_SIZE) * TILE_SIZE + TILE_SIZE / 2,
+        math.floor_f32(mp.y / TILE_SIZE) * TILE_SIZE + TILE_SIZE / 2,
+    }
+    is_valid_pos := true
+    for tower in towers {
+        if tower.position == tower_pos {
+            is_valid_pos = false
+            break
+        }
+    }
+    if is_valid_pos {
+        for track_tile in track_tiles {
+            if track_tile.position * TILE_SIZE + { TILE_SIZE / 2, TILE_SIZE / 2 } == tower_pos {
+                is_valid_pos = false
+                break
+            }
+        }
+    }
+    return is_valid_pos, tower_pos
+}
+
 restart :: proc() {
     clear(&doughnuts)
     clear(&towers)
@@ -178,6 +201,7 @@ restart :: proc() {
     doughnut_counter = 0
     tower_budget = 0
     started = false
+    game_finished = false
 }
 
 finish_level :: proc() {
@@ -222,25 +246,7 @@ main :: proc() {
         if !game_finished {
             if tower_budget > 0 && rl.IsMouseButtonPressed(.LEFT) {
                 mp := rl.GetScreenToWorld2D(rl.GetMousePosition(), camera)
-                tower_pos := rl.Vector2 {
-                    math.floor_f32(mp.x / TILE_SIZE) * TILE_SIZE + TILE_SIZE / 2,
-                    math.floor_f32(mp.y / TILE_SIZE) * TILE_SIZE + TILE_SIZE / 2,
-                }
-                is_valid_pos := true
-                for tower in towers {
-                    if tower.position == tower_pos {
-                        is_valid_pos = false
-                        break
-                    }
-                }
-                if is_valid_pos {
-                    for track_tile in track_tiles {
-                        if track_tile.position * TILE_SIZE + { TILE_SIZE / 2, TILE_SIZE / 2 } == tower_pos {
-                            is_valid_pos = false
-                            break
-                        }
-                    }
-                }
+                is_valid_pos, tower_pos := check_tower_pos_valid(mp)
                 if is_valid_pos {
                     append(&towers, Tower {
                         position = tower_pos,
@@ -390,15 +396,6 @@ main :: proc() {
             }
         }
 
-        mp := rl.GetScreenToWorld2D(rl.GetMousePosition(), camera)
-        highlight_rec := rl.Rectangle {
-            math.floor_f32(mp.x / TILE_SIZE) * TILE_SIZE,
-            math.floor_f32(mp.y / TILE_SIZE) * TILE_SIZE,
-            TILE_SIZE,
-            TILE_SIZE,
-        }
-        rl.DrawRectangleRec(highlight_rec, { 0, 228, 48, 100 })
-
         if (started) {
             update_conveyer_animation_values()
         }
@@ -406,35 +403,61 @@ main :: proc() {
             draw_conveyer_animation(tile, conveyor_texture)
         }
 
-        for tower in towers {
-            rl.DrawTextureV(tower_texture, tower.position - { TOWER_RADIUS, TOWER_RADIUS }, rl.WHITE)
-            rl.DrawCircleV(tower.position, SIGHT_RADIUS, { 0, 228, 48, 40 })
-        }
+        if !game_finished {
+            mp := rl.GetScreenToWorld2D(rl.GetMousePosition(), camera)
+            is_valid_pos, tower_pos := check_tower_pos_valid(mp)
+            highlight_rec := rl.Rectangle {
+                math.floor_f32(mp.x / TILE_SIZE) * TILE_SIZE,
+                math.floor_f32(mp.y / TILE_SIZE) * TILE_SIZE,
+                TILE_SIZE,
+                TILE_SIZE,
+            }
+            if is_valid_pos && tower_budget > 0 {
+                rl.DrawRectangleRec(highlight_rec, { 0, 228, 48, 100 })
+                rl.DrawCircleV(tower_pos, SIGHT_RADIUS, { 0, 228, 48, 60 })
+            } else {
+                rl.DrawRectangleRec(highlight_rec, { 255, 0, 0, 100 })
+            }
 
-        for doughnut in doughnuts {
-            if !doughnut.is_finished {
-                if doughnut.is_glazed {
-                    rl.DrawTextureV(doughnut_glazed_texture, doughnut.position - { DOUGHNUT_RADIUS, DOUGHNUT_RADIUS }, rl.WHITE)
-                } else {
-                    rl.DrawTextureV(doughnut_unglazed_texture, doughnut.position - { DOUGHNUT_RADIUS, DOUGHNUT_RADIUS }, rl.WHITE)
+            for tower in towers {
+                rl.DrawTextureV(tower_texture, tower.position - { TOWER_RADIUS, TOWER_RADIUS }, rl.WHITE)
+            }
+
+            for doughnut in doughnuts {
+                if !doughnut.is_finished {
+                    if doughnut.is_glazed {
+                        rl.DrawTextureV(doughnut_glazed_texture, doughnut.position - { DOUGHNUT_RADIUS, DOUGHNUT_RADIUS }, rl.WHITE)
+                    } else {
+                        rl.DrawTextureV(doughnut_unglazed_texture, doughnut.position - { DOUGHNUT_RADIUS, DOUGHNUT_RADIUS }, rl.WHITE)
+                    }
                 }
             }
-        }
 
-        for glaze in glazes {
-            rl.DrawTextureV(glaze_texture, glaze.position - { GLAZE_RADIUS, GLAZE_RADIUS }, rl.WHITE)
-        }
+            for glaze in glazes {
+                rl.DrawTextureV(glaze_texture, glaze.position - { GLAZE_RADIUS, GLAZE_RADIUS }, rl.WHITE)
+            }
 
-        level_text := fmt.ctprintf("Level %v", current_level_index + 1)
-        rl.DrawText(level_text, SCREEN_SIZE - 42, 7, 10, rl.GREEN)
+            level_text := fmt.ctprintf("Level %v", current_level_index + 1)
+            rl.DrawText(level_text, SCREEN_SIZE - 42, 7, 10, rl.GREEN)
 
-        tower_budget_text := fmt.ctprintf("Tower Budget: %v", tower_budget)
-        rl.DrawText(tower_budget_text, 5, 7, 10, rl.GREEN)
+            tower_budget_text := fmt.ctprintf("Tower Budget: %v", tower_budget)
+            rl.DrawText(tower_budget_text, 5, 7, 10, rl.GREEN)
 
-        if !started {
-            start_text := fmt.ctprint("Start Level: SPACE")
-            start_text_width := rl.MeasureText(start_text, 15)
-            rl.DrawText(start_text, SCREEN_SIZE / 2 - start_text_width / 2, SCREEN_SIZE / 2 - 15 , 15, rl.RED)
+            if !started {
+                start_text := fmt.ctprint("Start Level: SPACE")
+                start_text_width := rl.MeasureText(start_text, 15)
+                rl.DrawText(start_text, SCREEN_SIZE / 2 - start_text_width / 2, SCREEN_SIZE / 2 - 15 , 15, rl.RED)
+            }
+        } else {
+            if !started {
+                finish_text := fmt.ctprint("Thanks for all the Glazing!")
+                finish_text_width := rl.MeasureText(finish_text, 15)
+                rl.DrawText(finish_text, SCREEN_SIZE / 2 - finish_text_width / 2, SCREEN_SIZE / 2 - 15 , 15, rl.RED)
+
+                restart_text := fmt.ctprint("New Game: R")
+                restart_text_width := rl.MeasureText(restart_text, 10)
+                rl.DrawText(restart_text, SCREEN_SIZE / 2 - restart_text_width / 2, SCREEN_SIZE / 2 + 5 , 10, rl.RED)
+            }
         }
 
         rl.EndMode2D()
