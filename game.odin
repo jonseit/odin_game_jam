@@ -156,23 +156,6 @@ draw_conveyer_animation :: proc(tile: Track_Tile, texture: rl.Texture2D) {
 
 restart :: proc() {
     clear(&doughnuts)
-//    append(&doughnuts, Doughnut {
-//        position = track_tiles[2].position * TILE_SIZE + { TILE_SIZE / 2, TILE_SIZE / 2 },
-//        track_segment_idx = 0,
-//    })
-//    append(&doughnuts, Doughnut {
-//        position = track_tiles[1].position * TILE_SIZE + { TILE_SIZE / 2, TILE_SIZE / 2 },
-//        track_segment_idx = 0,
-//    })
-//    append(&doughnuts, Doughnut {
-//        position = track[0].position * TILE_SIZE + { TILE_SIZE / 2, TILE_SIZE / 2 },
-//        track_segment_idx = 0,
-//    })
-//    append(&doughnuts, Doughnut {
-//        position = rl.Vector2{ -1, 2 } * TILE_SIZE + { TILE_SIZE / 2, TILE_SIZE / 2 },
-//        track_segment_idx = 0,
-//    })
-
     clear(&towers)
     clear(&glazes)
 }
@@ -180,6 +163,7 @@ restart :: proc() {
 main :: proc() {
     rl.SetConfigFlags({ .VSYNC_HINT })
     rl.InitWindow(SCREEN_SIZE_PX, SCREEN_SIZE_PX, "Glaze the Doughnut!")
+    rl.SetWindowPosition(100, 50)
     rl.InitAudioDevice()
     rl.SetTargetFPS(500)
 
@@ -245,16 +229,11 @@ main :: proc() {
 
                 if doughnut.position.x < 0 { // special case for when doughnut is out of screen at track start
                     next_position_x := doughnut.position.x + rl.GetFrameTime() * DOUGHNUT_SPEED
-                    if next_position_x >= 0 {
-                        position_carry_over := doughnut.position.x - next_position_x
-                        doughnut.position.x = position_carry_over * next_track_segment.direction.x
-                    } else {
-                        doughnut.position.x = next_position_x
-                    }
+                    doughnut.position.x = next_position_x
                 } else if cur_track_segment.direction.y > 0 {
                     next_position_y := doughnut.position.y + rl.GetFrameTime() * DOUGHNUT_SPEED
                     if next_position_y >= next_track_segment.position.y {
-                        position_carry_over := next_position_y - doughnut.position.y
+                        position_carry_over := next_position_y - next_track_segment.position.y
                         doughnut.position.y = next_track_segment.position.y
                         doughnut.position.x += position_carry_over * next_track_segment.direction.x
                         doughnut.track_segment_idx += 1
@@ -264,7 +243,7 @@ main :: proc() {
                 } else if cur_track_segment.direction.y < 0 {
                     next_position_y := doughnut.position.y - rl.GetFrameTime() * DOUGHNUT_SPEED
                     if next_position_y <= next_track_segment.position.y {
-                        position_carry_over := doughnut.position.y - next_position_y
+                        position_carry_over := next_track_segment.position.y - next_position_y
                         doughnut.position.y = next_track_segment.position.y
                         doughnut.position.x += position_carry_over * next_track_segment.direction.x
                         doughnut.track_segment_idx += 1
@@ -274,7 +253,7 @@ main :: proc() {
                 } else if cur_track_segment.direction.x > 0 {
                     next_position_x := doughnut.position.x + rl.GetFrameTime() * DOUGHNUT_SPEED
                     if next_position_x >= next_track_segment.position.x {
-                        position_carry_over := next_position_x - doughnut.position.x
+                        position_carry_over := next_position_x - next_track_segment.position.x
                         doughnut.position.x = next_track_segment.position.x
                         doughnut.position.y += position_carry_over * next_track_segment.direction.y
                         doughnut.track_segment_idx += 1
@@ -284,7 +263,7 @@ main :: proc() {
                 } else if cur_track_segment.direction.x < 0 {
                     next_position_x := doughnut.position.x - rl.GetFrameTime() * DOUGHNUT_SPEED
                     if next_position_x <= next_track_segment.position.x {
-                        position_carry_over := doughnut.position.x - next_position_x
+                        position_carry_over := next_track_segment.position.x - next_position_x
                         doughnut.position.x = next_track_segment.position.x
                         doughnut.position.y += position_carry_over * next_track_segment.direction.y
                         doughnut.track_segment_idx += 1
