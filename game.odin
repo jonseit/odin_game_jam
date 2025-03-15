@@ -12,14 +12,14 @@ TILE_SIZE :: 24
 NUM_TRACK_TILES :: 29
 NUM_TRACK_SEGMENTS :: 11
 TOWER_RADIUS :: 10
-SIGHT_RADIUS :: 60
+SIGHT_RADIUS :: 50
 DOUGHNUT_RADIUS :: 8
 GLAZE_RADIUS :: 4
 GLAZE_SPEED :: 100
 RELOADING_TIME :: 2.5
 NUM_CONVEYER_FRAMES :: 3
 CONVEYER_FRAME_LENGTH :: 0.05
-NUM_LEVELS :: 3
+NUM_LEVELS :: 5
 
 Orientation :: enum {
     North,
@@ -69,9 +69,11 @@ Level :: struct {
 }
 
 levels := [NUM_LEVELS]Level {
-    { 1, 40, 5, 3 }, //{ 1, 40, 50 }
-    { 0.8, 50, 6, 3 }, //{ 0.8, 50, 70 }
-    { 0.6, 60, 7, 3 }, //{ 0.6, 60, 100 }
+    { 1, 40, 20, 2 },
+    { 0.8, 50, 30, 1 },
+    { 0.6, 60, 40, 1 },
+    { 0.45, 70, 50, 1 },
+    { 0.3, 80, 60, 1 },
 }
 
 tile_orientations := [Orientation]Tile_Orientation {
@@ -219,8 +221,6 @@ init_level :: proc() {
 main :: proc() {
     rl.SetConfigFlags({ .VSYNC_HINT })
     rl.InitWindow(SCREEN_SIZE_PX, SCREEN_SIZE_PX, "Glaze the Doughnut!")
-    rl.SetWindowPosition(100, 50)
-    rl.InitAudioDevice()
     rl.SetTargetFPS(500)
 
     tower_texture := rl.LoadTexture("assets/tower.png")
@@ -278,7 +278,7 @@ main :: proc() {
                         doughnut_speed := levels[current_level_index].doughnut_speed
 
                         if doughnut.position.x < 0 {
-                        // special case for when doughnut is out of screen at track start
+                            // special case for when doughnut is out of screen at track start
                             next_position_x := doughnut.position.x + rl.GetFrameTime() * doughnut_speed
                             doughnut.position.x = next_position_x
                         } else if cur_track_segment.direction.y > 0 {
@@ -473,6 +473,5 @@ main :: proc() {
     rl.UnloadTexture(conveyor_texture)
     rl.UnloadTexture(tile_texture)
 
-    rl.CloseAudioDevice()
     rl.CloseWindow()
 }
