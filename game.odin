@@ -15,12 +15,11 @@ TOWER_RADIUS :: 10
 SIGHT_RADIUS :: 60
 DOUGHNUT_RADIUS :: 8
 GLAZE_RADIUS :: 4
-DOUGHNUT_SPEED :: 40
 GLAZE_SPEED :: 100
 RELOADING_TIME :: 2.5
-NEW_DOUGHNUT_TIME_INTERVAL :: 1
 NUM_CONVEYER_FRAMES :: 3
 CONVEYER_FRAME_LENGTH :: 0.05
+NUM_LEVELS :: 3
 
 Orientation :: enum {
     North,
@@ -60,6 +59,19 @@ Track_Tile :: struct {
 Track_Segment :: struct {
     position: rl.Vector2,
     direction: rl.Vector2,
+}
+
+Level :: struct {
+    doughnut_time_interval: f32,
+    doughnut_speed: f32,
+    max_num_doughnuts: int,
+    tower_budget: int,
+}
+
+levels := [NUM_LEVELS]Level {
+    { 1, 40, 5, 3 }, //{ 1, 40, 50 }
+    { 0.8, 50, 6, 3 }, //{ 0.8, 50, 70 }
+    { 0.6, 60, 7, 3 }, //{ 0.6, 60, 100 }
 }
 
 tile_orientations := [Orientation]Tile_Orientation {
@@ -119,8 +131,13 @@ doughnuts: [dynamic]Doughnut
 towers: [dynamic]Tower
 glazes: [dynamic]Glaze
 doughnut_timer: f32
+doughnut_counter: int
 conveyer_current_frame: int
 conveyer_frame_timer: f32
+started: bool
+game_finished: bool
+tower_budget: int
+current_level_index: int
 
 update_conveyer_animation_values :: proc() {
     conveyer_frame_timer += rl.GetFrameTime()
@@ -157,6 +174,22 @@ restart :: proc() {
     clear(&doughnuts)
     clear(&towers)
     clear(&glazes)
+    current_level_index = -1
+    doughnut_counter = 0
+    tower_budget = 0
+    started = false
+}
+
+finish_level :: proc() {
+    clear(&doughnuts)
+    clear(&glazes)
+    doughnut_counter = 0
+    started = false
+}
+
+init_level :: proc() {
+    current_level_index += 1
+    tower_budget += levels[current_level_index].tower_budget
 }
 
 main :: proc() {
@@ -174,6 +207,7 @@ main :: proc() {
     tile_texture := rl.LoadTexture("assets/tile.png")
 
     restart()
+    init_level()
 
     for !rl.WindowShouldClose() {
         camera := rl.Camera2D {
@@ -182,143 +216,168 @@ main :: proc() {
 
         if rl.IsKeyPressed(.R) {
             restart()
+            init_level()
         }
 
-        if rl.IsMouseButtonPressed(.LEFT) {
-            mp := rl.GetScreenToWorld2D(rl.GetMousePosition(), camera)
-            tower_pos := rl.Vector2 {
-                math.floor_f32(mp.x / TILE_SIZE) * TILE_SIZE + TILE_SIZE / 2,
-                math.floor_f32(mp.y / TILE_SIZE) * TILE_SIZE + TILE_SIZE / 2,
-            }
-            is_valid_pos := true
-            for tower in towers {
-                if tower.position == tower_pos {
-                    is_valid_pos = false
-                    break
+        if !game_finished {
+            if tower_budget > 0 && rl.IsMouseButtonPressed(.LEFT) {
+                mp := rl.GetScreenToWorld2D(rl.GetMousePosition(), camera)
+                tower_pos := rl.Vector2 {
+                    math.floor_f32(mp.x / TILE_SIZE) * TILE_SIZE + TILE_SIZE / 2,
+                    math.floor_f32(mp.y / TILE_SIZE) * TILE_SIZE + TILE_SIZE / 2,
                 }
-            }
-            if is_valid_pos {
-                for track_tile in track_tiles {
-                    if track_tile.position * TILE_SIZE + { TILE_SIZE / 2, TILE_SIZE / 2 } == tower_pos {
+                is_valid_pos := true
+                for tower in towers {
+                    if tower.position == tower_pos {
                         is_valid_pos = false
                         break
                     }
                 }
-            }
-            if is_valid_pos {
-                append(&towers, Tower {
-                    position = tower_pos,
-                })
-            }
-        }
-
-        doughnut_timer += rl.GetFrameTime()
-        if doughnut_timer >= NEW_DOUGHNUT_TIME_INTERVAL {
-            append(&doughnuts, Doughnut {
-                position = rl.Vector2{ -1, 2 } * TILE_SIZE + { TILE_SIZE / 2, TILE_SIZE / 2 },
-                track_segment_idx = 0,
-            })
-            doughnut_timer = 0
-        }
-
-        for &doughnut in doughnuts {
-            if !doughnut.is_finished {
-                cur_track_segment := track[doughnut.track_segment_idx]
-                next_track_segment := track[doughnut.track_segment_idx + 1]
-
-                if doughnut.position.x < 0 { // special case for when doughnut is out of screen at track start
-                    next_position_x := doughnut.position.x + rl.GetFrameTime() * DOUGHNUT_SPEED
-                    doughnut.position.x = next_position_x
-                } else if cur_track_segment.direction.y > 0 {
-                    next_position_y := doughnut.position.y + rl.GetFrameTime() * DOUGHNUT_SPEED
-                    if next_position_y >= next_track_segment.position.y {
-                        position_carry_over := next_position_y - next_track_segment.position.y
-                        doughnut.position.y = next_track_segment.position.y
-                        doughnut.position.x += position_carry_over * next_track_segment.direction.x
-                        doughnut.track_segment_idx += 1
-                    } else {
-                        doughnut.position.y = next_position_y
-                    }
-                } else if cur_track_segment.direction.y < 0 {
-                    next_position_y := doughnut.position.y - rl.GetFrameTime() * DOUGHNUT_SPEED
-                    if next_position_y <= next_track_segment.position.y {
-                        position_carry_over := next_track_segment.position.y - next_position_y
-                        doughnut.position.y = next_track_segment.position.y
-                        doughnut.position.x += position_carry_over * next_track_segment.direction.x
-                        doughnut.track_segment_idx += 1
-                    } else {
-                        doughnut.position.y = next_position_y
-                    }
-                } else if cur_track_segment.direction.x > 0 {
-                    next_position_x := doughnut.position.x + rl.GetFrameTime() * DOUGHNUT_SPEED
-                    if next_position_x >= next_track_segment.position.x {
-                        position_carry_over := next_position_x - next_track_segment.position.x
-                        doughnut.position.x = next_track_segment.position.x
-                        doughnut.position.y += position_carry_over * next_track_segment.direction.y
-                        doughnut.track_segment_idx += 1
-                    } else {
-                        doughnut.position.x = next_position_x
-                    }
-                } else if cur_track_segment.direction.x < 0 {
-                    next_position_x := doughnut.position.x - rl.GetFrameTime() * DOUGHNUT_SPEED
-                    if next_position_x <= next_track_segment.position.x {
-                        position_carry_over := next_track_segment.position.x - next_position_x
-                        doughnut.position.x = next_track_segment.position.x
-                        doughnut.position.y += position_carry_over * next_track_segment.direction.y
-                        doughnut.track_segment_idx += 1
-                    } else {
-                        doughnut.position.x = next_position_x
+                if is_valid_pos {
+                    for track_tile in track_tiles {
+                        if track_tile.position * TILE_SIZE + { TILE_SIZE / 2, TILE_SIZE / 2 } == tower_pos {
+                            is_valid_pos = false
+                            break
+                        }
                     }
                 }
-
-                if doughnut.track_segment_idx == NUM_TRACK_SEGMENTS - 1 {
-                    doughnut.is_finished = true
+                if is_valid_pos {
+                    append(&towers, Tower {
+                        position = tower_pos,
+                    })
+                    tower_budget -= 1
                 }
             }
-        }
 
-        for &tower in towers {
-            if tower.reloading_timer <= 0 {
-                for &doughnut in doughnuts {
-                    if !doughnut.is_glazed && rl.CheckCollisionCircles(tower.position, SIGHT_RADIUS, doughnut.position, DOUGHNUT_RADIUS) {
-                        glaze_dir := linalg.normalize(doughnut.position - tower.position)
-                        append(&glazes, Glaze {
-                            position = tower.position,
-                            direction = glaze_dir,
-                            target_doughnut = &doughnut,
-                        })
-
-                        tower.reloading_timer = RELOADING_TIME
-                        break
-                    }
+            if !started {
+                if current_level_index < NUM_LEVELS && rl.IsKeyPressed(.SPACE) {
+                    started = true
                 }
             } else {
-                tower.reloading_timer -= rl.GetFrameTime()
-            }
-        }
+                doughnut_timer += rl.GetFrameTime()
+                if doughnut_counter < levels[current_level_index].max_num_doughnuts &&
+                doughnut_timer >= levels[current_level_index].doughnut_time_interval {
+                    append(&doughnuts, Doughnut {
+                        position = rl.Vector2{ -1, 2 } * TILE_SIZE + { TILE_SIZE / 2, TILE_SIZE / 2 },
+                        track_segment_idx = 0,
+                    })
+                    doughnut_counter += 1
+                    doughnut_timer = 0
+                }
 
-        outer: for &glaze, idx in glazes {
-            if glaze.position.x + GLAZE_RADIUS * 6 < 0 ||
-            glaze.position.x > SCREEN_SIZE + GLAZE_RADIUS * 6 ||
-            glaze.position.y + GLAZE_RADIUS * 6 < 0 ||
-            glaze.position.y > SCREEN_SIZE + GLAZE_RADIUS * 6 {
-                unordered_remove(&glazes, idx)
-                continue
-            }
+                for &doughnut in doughnuts {
+                    if !doughnut.is_finished {
+                        cur_track_segment := track[doughnut.track_segment_idx]
+                        next_track_segment := track[doughnut.track_segment_idx + 1]
+                        doughnut_speed := levels[current_level_index].doughnut_speed
 
-            for &doughnut in doughnuts {
-                if !doughnut.is_glazed && rl.CheckCollisionCircles(glaze.position, GLAZE_RADIUS, doughnut.position, DOUGHNUT_RADIUS) {
-                    doughnut.is_glazed = true
-                    unordered_remove(&glazes, idx)
-                    continue outer
+                        if doughnut.position.x < 0 {
+                        // special case for when doughnut is out of screen at track start
+                            next_position_x := doughnut.position.x + rl.GetFrameTime() * doughnut_speed
+                            doughnut.position.x = next_position_x
+                        } else if cur_track_segment.direction.y > 0 {
+                            next_position_y := doughnut.position.y + rl.GetFrameTime() * doughnut_speed
+                            if next_position_y >= next_track_segment.position.y {
+                                position_carry_over := next_position_y - next_track_segment.position.y
+                                doughnut.position.y = next_track_segment.position.y
+                                doughnut.position.x += position_carry_over * next_track_segment.direction.x
+                                doughnut.track_segment_idx += 1
+                            } else {
+                                doughnut.position.y = next_position_y
+                            }
+                        } else if cur_track_segment.direction.y < 0 {
+                            next_position_y := doughnut.position.y - rl.GetFrameTime() * doughnut_speed
+                            if next_position_y <= next_track_segment.position.y {
+                                position_carry_over := next_track_segment.position.y - next_position_y
+                                doughnut.position.y = next_track_segment.position.y
+                                doughnut.position.x += position_carry_over * next_track_segment.direction.x
+                                doughnut.track_segment_idx += 1
+                            } else {
+                                doughnut.position.y = next_position_y
+                            }
+                        } else if cur_track_segment.direction.x > 0 {
+                            next_position_x := doughnut.position.x + rl.GetFrameTime() * doughnut_speed
+                            if next_position_x >= next_track_segment.position.x {
+                                position_carry_over := next_position_x - next_track_segment.position.x
+                                doughnut.position.x = next_track_segment.position.x
+                                doughnut.position.y += position_carry_over * next_track_segment.direction.y
+                                doughnut.track_segment_idx += 1
+                            } else {
+                                doughnut.position.x = next_position_x
+                            }
+                        } else if cur_track_segment.direction.x < 0 {
+                            next_position_x := doughnut.position.x - rl.GetFrameTime() * doughnut_speed
+                            if next_position_x <= next_track_segment.position.x {
+                                position_carry_over := next_track_segment.position.x - next_position_x
+                                doughnut.position.x = next_track_segment.position.x
+                                doughnut.position.y += position_carry_over * next_track_segment.direction.y
+                                doughnut.track_segment_idx += 1
+                            } else {
+                                doughnut.position.x = next_position_x
+                            }
+                        }
+
+                        if doughnut.track_segment_idx == NUM_TRACK_SEGMENTS - 1 {
+                            doughnut.is_finished = true
+                        }
+                    }
+                }
+
+                for &tower in towers {
+                    if tower.reloading_timer <= 0 {
+                        for &doughnut in doughnuts {
+                            if !doughnut.is_glazed && rl.CheckCollisionCircles(tower.position, SIGHT_RADIUS, doughnut.position, DOUGHNUT_RADIUS) {
+                                glaze_dir := linalg.normalize(doughnut.position - tower.position)
+                                append(&glazes, Glaze {
+                                    position = tower.position,
+                                    direction = glaze_dir,
+                                    target_doughnut = &doughnut,
+                                })
+
+                                tower.reloading_timer = RELOADING_TIME
+                                break
+                            }
+                        }
+                    } else {
+                        tower.reloading_timer -= rl.GetFrameTime()
+                    }
+                }
+
+                outer: for &glaze, idx in glazes {
+                    if glaze.position.x + GLAZE_RADIUS * 6 < 0 ||
+                    glaze.position.x > SCREEN_SIZE + GLAZE_RADIUS * 6 ||
+                    glaze.position.y + GLAZE_RADIUS * 6 < 0 ||
+                    glaze.position.y > SCREEN_SIZE + GLAZE_RADIUS * 6 {
+                        unordered_remove(&glazes, idx)
+                        continue
+                    }
+
+                    for &doughnut in doughnuts {
+                        if !doughnut.is_glazed && rl.CheckCollisionCircles(glaze.position, GLAZE_RADIUS, doughnut.position, DOUGHNUT_RADIUS) {
+                            doughnut.is_glazed = true
+                            unordered_remove(&glazes, idx)
+                            continue outer
+                        }
+                    }
+
+                    target_doughnut := glaze.target_doughnut^
+                    if !target_doughnut.is_glazed {
+                        glaze.direction = linalg.normalize(target_doughnut.position - glaze.position)
+                    }
+                    glaze.position += rl.GetFrameTime() * GLAZE_SPEED * glaze.direction
                 }
             }
 
-            target_doughnut := glaze.target_doughnut^
-            if !target_doughnut.is_glazed {
-                glaze.direction = linalg.normalize(target_doughnut.position - glaze.position)
+            if started &&
+            doughnut_counter == levels[current_level_index].max_num_doughnuts &&
+            doughnuts[len(doughnuts) - 1].is_finished {
+                finish_level()
+                if current_level_index < NUM_LEVELS - 1 {
+                    init_level()
+                } else {
+                    game_finished = true
+                }
             }
-            glaze.position += rl.GetFrameTime() * GLAZE_SPEED * glaze.direction
         }
 
         // Rendering
@@ -340,7 +399,9 @@ main :: proc() {
         }
         rl.DrawRectangleRec(highlight_rec, { 0, 228, 48, 100 })
 
-        update_conveyer_animation_values()
+        if (started) {
+            update_conveyer_animation_values()
+        }
         for tile in track_tiles {
             draw_conveyer_animation(tile, conveyor_texture)
         }
@@ -364,14 +425,23 @@ main :: proc() {
             rl.DrawTextureV(glaze_texture, glaze.position - { GLAZE_RADIUS, GLAZE_RADIUS }, rl.WHITE)
         }
 
+        level_text := fmt.ctprintf("Level %v", current_level_index + 1)
+        rl.DrawText(level_text, SCREEN_SIZE - 42, 7, 10, rl.GREEN)
+
+        tower_budget_text := fmt.ctprintf("Tower Budget: %v", tower_budget)
+        rl.DrawText(tower_budget_text, 5, 7, 10, rl.GREEN)
+
+        if !started {
+            start_text := fmt.ctprint("Start Level: SPACE")
+            start_text_width := rl.MeasureText(start_text, 15)
+            rl.DrawText(start_text, SCREEN_SIZE / 2 - start_text_width / 2, SCREEN_SIZE / 2 - 15 , 15, rl.RED)
+        }
+
         rl.EndMode2D()
         rl.EndDrawing()
 
         free_all(context.temp_allocator)
     }
-
-    fmt.printfln("glazes array length: %v", len(glazes)) // debug
-    fmt.printfln("dougnut array length: %v", len(doughnuts)) // debug
 
     rl.UnloadTexture(tower_texture)
     rl.UnloadTexture(glaze_texture)
