@@ -220,7 +220,7 @@ init_level :: proc() {
 
 main :: proc() {
     rl.SetConfigFlags({ .VSYNC_HINT })
-    rl.InitWindow(SCREEN_SIZE_PX, SCREEN_SIZE_PX, "Glaze the Doughnut!")
+    rl.InitWindow(SCREEN_SIZE_PX, SCREEN_SIZE_PX, "Glaze the Doughnuts!")
     rl.SetTargetFPS(500)
 
     tower_texture := rl.LoadTexture("assets/tower.png")
