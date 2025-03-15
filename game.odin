@@ -34,7 +34,6 @@ Doughnut :: struct {
     track_segment_idx: int,
     is_glazed: bool,
     is_finished: bool,
-    glaze_pointer_counter: int,
 }
 
 Tower :: struct {
@@ -288,7 +287,6 @@ main :: proc() {
                             direction = glaze_dir,
                             target_doughnut = &doughnut,
                         })
-                        doughnut.glaze_pointer_counter += 1
 
                         tower.reloading_timer = RELOADING_TIME
                         break
@@ -304,7 +302,6 @@ main :: proc() {
             glaze.position.x > SCREEN_SIZE + GLAZE_RADIUS * 6 ||
             glaze.position.y + GLAZE_RADIUS * 6 < 0 ||
             glaze.position.y > SCREEN_SIZE + GLAZE_RADIUS * 6 {
-                glaze.target_doughnut^.glaze_pointer_counter -= 1
                 unordered_remove(&glazes, idx)
                 continue
             }
@@ -312,7 +309,6 @@ main :: proc() {
             for &doughnut in doughnuts {
                 if !doughnut.is_glazed && rl.CheckCollisionCircles(glaze.position, GLAZE_RADIUS, doughnut.position, DOUGHNUT_RADIUS) {
                     doughnut.is_glazed = true
-                    glaze.target_doughnut^.glaze_pointer_counter -= 1
                     unordered_remove(&glazes, idx)
                     continue outer
                 }
@@ -323,12 +319,6 @@ main :: proc() {
                 glaze.direction = linalg.normalize(target_doughnut.position - glaze.position)
             }
             glaze.position += rl.GetFrameTime() * GLAZE_SPEED * glaze.direction
-        }
-
-        for &doughnut, idx in doughnuts {
-            if doughnut.is_finished && doughnut.glaze_pointer_counter == 0 {
-                ordered_remove(&doughnuts, idx)
-            }
         }
 
         // Rendering
